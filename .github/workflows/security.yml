@@ -7,7 +7,8 @@ on:
     branches: [ main ]
 
 permissions:
-  contents: read
+  contents: write
+  pull-requests: write  # Добавлено разрешение для создания PR
   security-events: write
   actions: read
 
@@ -16,6 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.PAT_TOKEN }}  # Персональный токен доступа
       
       - name: Set up JDK 17
         uses: actions/setup-java@v3
@@ -41,27 +44,36 @@ jobs:
       image: returntocorp/semgrep:latest
     steps:
       - uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.PAT_TOKEN }}  # Персональный токен доступа
       
       - name: Create reports directory
         run: mkdir -p reports
       
-      - name: Semgrep Security Scan
+      - name: Semgrep Security Scan with Autofix
         run: |
           semgrep scan \
             --config "p/java" \
             --config "p/secrets" \
             --config "p/owasp-top-ten" \
             --output reports/semgrep-results.sarif \
-            --sarif || true
+            --sarif \
             --autofix || true
-
+          
       - name: Create Pull Request with fixes
         uses: peter-evans/create-pull-request@v5
         with:
+          token: ${{ secrets.PAT_TOKEN }}  # Персональный токен доступа
           commit-message: 'fix: auto-fixes from semgrep'
           title: 'Semgrep Auto-fixes'
-          body: 'Applied automatic fixes suggested by Semgrep security scan'
+          body: |
+            Автоматические исправления от Semgrep security scan
+            
+            Этот PR содержит автоматические исправления проблем безопасности, найденных Semgrep.
+            Пожалуйста, проверьте изменения перед merge.
           branch: semgrep-fixes
+          base: main
+          delete-branch: true
           
       - name: Upload SARIF file
         uses: github/codeql-action/upload-sarif@v2
