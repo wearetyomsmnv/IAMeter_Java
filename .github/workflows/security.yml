@@ -37,17 +37,22 @@ jobs:
   semgrep:
     needs: build
     runs-on: ubuntu-latest
+    container:
+      image: returntocorp/semgrep:latest
     steps:
       - uses: actions/checkout@v3
       
+      - name: Create reports directory
+        run: mkdir -p reports
+      
       - name: Semgrep Security Scan
-        uses: returntocorp/semgrep-action@v1
-        with:
-          config: >-
-            p/java
-            p/secrets
-            p/owasp-top-ten
-          output: reports/semgrep-results.sarif
+        run: |
+          semgrep scan \
+            --config "p/java" \
+            --config "p/secrets" \
+            --config "p/owasp-top-ten" \
+            --output reports/semgrep-results.sarif \
+            --sarif || true
           
       - name: Upload SARIF file
         uses: github/codeql-action/upload-sarif@v2
@@ -73,10 +78,9 @@ jobs:
           name: webapp
           path: target/
 
-      # Установка и настройка Tomcat
       - name: Setup Tomcat
         run: |
-          wget https://dlcdn.apache.org/tomcat/tomcat-9/v9.0.83/bin/apache-tomcat-9.0.83.tar.gz
+          wget https://archive.apache.org/dist/tomcat/tomcat-9/v9.0.83/bin/apache-tomcat-9.0.83.tar.gz
           tar xzf apache-tomcat-9.0.83.tar.gz
           cp target/iameter.war apache-tomcat-9.0.83/webapps/
           chmod +x apache-tomcat-9.0.83/bin/catalina.sh
@@ -85,7 +89,6 @@ jobs:
           sleep 30
           curl -v http://localhost:8080/iameter/ || true
 
-      # Подготовка для ZAP
       - name: Prepare ZAP Environment
         run: |
           sudo mkdir -p /zap/wrk
@@ -103,12 +106,6 @@ jobs:
           allow_issue_writing: false
           fail_action: false
 
-      # Сохраняем лог Tomcat в случае проблем
-      - name: Tomcat Logs
-        if: always()
-        run: |
-          cat apache-tomcat-9.0.83/logs/catalina.out || true
-          
       - name: Upload Tomcat Logs
         if: always()
         uses: actions/upload-artifact@v3
@@ -117,7 +114,6 @@ jobs:
           path: apache-tomcat-9.0.83/logs/
           retention-days: 5
 
-      # Сохраняем результаты ZAP
       - name: Upload ZAP Results
         if: always()
         uses: actions/upload-artifact@v3
