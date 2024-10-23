@@ -1,0 +1,107 @@
+name: Security Checks
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # Сборка и базовые проверки
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up JDK
+        uses: actions/setup-java@v3
+        with:
+          java-version: '11'
+          distribution: 'adopt'
+
+      - name: Build with Maven
+        run: mvn clean install
+
+  # SAST проверка с помощью Semgrep
+  semgrep:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Semgrep Security Scan
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: >-
+            p/java
+            p/secrets
+            p/owasp-top-ten
+          output: semgrep-results.sarif
+          
+      - name: Upload SARIF file
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: semgrep-results.sarif
+
+  # DAST проверка с помощью OWASP ZAP
+  zap_scan:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      # Сначала запускаем WebGoat
+      - name: Start WebGoat
+        run: |
+          docker run -d -p 8080:8080 webgoat/webgoat
+          sleep 30  # даем время на запуск
+
+      - name: ZAP Scan
+        uses: zaproxy/action-baseline@v0.7.0
+        with:
+          target: 'http://localhost:8080'
+          rules_file_name: '.zap/rules.tsv'
+          cmd_options: '-a'
+
+  # Проверка зависимостей с помощью OWASP Dependency Check
+  dependency_check:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Dependency Check
+        uses: dependency-check/Dependency-Check_Action@main
+        env:
+          # Можно добавить NVID API ключ для более полных результатов
+          NVID_API_KEY: ${{ secrets.NVID_API_KEY }}
+        with:
+          project: 'WebGoat'
+          path: '.'
+          format: 'HTML'
+          args: >
+            --suppression suppression.xml
+            --failOnCVSS 7
+            --enableExperimental
+
+      - name: Upload Dependency Check Report
+        uses: actions/upload-artifact@v3
+        with:
+          name: dependency-check-report
+          path: dependency-check-report.html
+
+  # Сбор и публикация отчетов
+  publish_security_reports:
+    needs: [semgrep, zap_scan, dependency_check]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+
+      - name: Archive Security Results
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-reports-bundle
+          path: |
+            semgrep-results.sarif
+            zap-report.html
+            dependency-check-report.html
