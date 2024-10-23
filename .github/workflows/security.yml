@@ -53,6 +53,15 @@ jobs:
             --config "p/owasp-top-ten" \
             --output reports/semgrep-results.sarif \
             --sarif || true
+            --autofix || true
+
+      - name: Create Pull Request with fixes
+        uses: peter-evans/create-pull-request@v5
+        with:
+          commit-message: 'fix: auto-fixes from semgrep'
+          title: 'Semgrep Auto-fixes'
+          body: 'Applied automatic fixes suggested by Semgrep security scan'
+          branch: semgrep-fixes
           
       - name: Upload SARIF file
         uses: github/codeql-action/upload-sarif@v2
@@ -193,3 +202,24 @@ jobs:
             zap-results
             dependency-check-results
             tomcat-logs
+
+  notify:
+    needs: [semgrep, zap_scan, dependency_check]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Send notification
+        uses: nvdaes/github-action-workflow-notification@v1
+        with:
+          notification_title: 'Security Scan Results'
+          notification_body: |
+            Security scan completed for ${{github.repository}}
+            
+            Results summary:
+            - Semgrep scan: ${{needs.semgrep.result}}
+            - ZAP scan: ${{needs.zap_scan.result}}
+            - Dependency check: ${{needs.dependency_check.result}}
+            
+            Check full results here:
+            ${{github.server_url}}/${{github.repository}}/actions/runs/${{github.run_id}}
+          notification_type: 'email'
