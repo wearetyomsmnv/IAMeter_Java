@@ -38,7 +38,8 @@ public class _09_XXE extends HttpServlet {
 
             builderFactory = DocumentBuilderFactory.newInstance();
             builderFactory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
-            documentBuilder = builderFactory.newDocumentBuilder();
+            builderFactory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+            builderFactory.newDocumentBuilder();
             documentBuilder.parse(parm1); //True positive
 
         } catch (SAXException e) {
