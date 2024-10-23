@@ -36,6 +36,12 @@
                   <target>17</target>
               </configuration>
           </plugin>
+	  <plugin>
+    		<groupId>org.owasp</groupId>
+    		<artifactId>dependency-check-maven</artifactId>
+    		<version>7.1.1</version>
+	  </plugin>
       </plugins>
   </build>
 </project>
+
